@@ -38,11 +38,35 @@ library(patchwork)
 library(fasterize)
 
 
+# --------------------------
+# Read input data: 
+# --------------------------
 
-# How many cells can I expect based on Bavaria size?? -------------------
-area = 70000 # km2
 
-a= sqrt(area)  # 264 *264 km
+# Get Germany data ----------------------
+ger.shp <- st_read(paste(myPath, inFolder, "germany.shp", sep = "/")) # read watershed
+
+plot(ger.shp["COUNTRY"])
+
+# Get Europe data ----------------------
+
+eu.shp <- st_read(paste(myPath, inFolder, "europe.shp", sep = "/")) # read watershed
+
+plot(eu.shp)
+
+# Simplify polygon, keep only geometry
+ger.simple <- st_simplify(ger.shp, preserveTopology = FALSE, dTolerance = 1000)
+eu.simple <- st_simplify(eu.shp, preserveTopology = FALSE, dTolerance = 1000)
+#bav.shp.sp <-bav.shp$geom
+
+
+# How many cells can I expect based on Europe size?? -------------------
+
+#get area of Europe
+area <- st_area(eu.simple)/1000000 # retrieve area in km2 for europe
+#area <- st_area(ger.simple)/1000000 # retrieve area in km2 for germany
+
+a= sqrt(area)  # 2398 *2398 km
 
 # How many cells to expect??
 # get cell size: 10, 25, 50 km
@@ -56,30 +80,13 @@ df$r = sqrt(df$area/pi)
 (df)
 
 
-# --------------------------
-# Read input data: 
-# --------------------------
-
-
-# Get Bavaria data ----------------------
-bav.shp <- st_read(paste(myPath, inFolder, "outline_bavaria.gpkg", sep = "/"), 
-                         layer = 'outline_bavaria') # read watershed
-
-plot(bav.shp["LAND"])
-
-
-# Simplify polygon, keep only geometry
-bav.simple <- st_simplify(bav.shp, preserveTopology = FALSE, dTolerance = 1000)
-#bav.shp.sp <-bav.shp$geom
-
-
 # Check projection
-st_crs(bav.simple)$proj4string  # projection is in m, therefore the cell size need to be in meters as well
-
+st_crs(ger.simple)$proj4string  # projection is in m, therefore the cell size need to be in meters as well
+st_crs(eu.simple)$proj4string 
 
 # Make a grid: hexagon and a square
 # Make a grid 
-g = st_make_grid(bav.simple, 
+g = st_make_grid(eu.simple, 
                  #n = c(10,10),
                  cellsize = 50000,  # 50 km
                  #cellsize = c(diff(st_bbox(df.geom)[c(1, 3)]), 
@@ -87,11 +94,11 @@ g = st_make_grid(bav.simple,
                  square = FALSE)  # make hexagon, not square
 
 plot(g)
-plot(bav.simple, add = T)
+plot(eu.simple, add = T)
 
 
 # # Export the new file
-st_write(g, paste( myPath, outFolder, "hexa50_2.shp", sep = "/"), append=FALSE)
+st_write(g, paste( myPath, outFolder, "hexa50_eu.gpkg", sep = "/"), append=FALSE)
 
 
 # ------------------------------------
@@ -110,11 +117,11 @@ g_ls <- lapply(cell_size, function(x) {
   outname = paste0("grid_", x)
   
   print(outname)
-  g = st_make_grid(bav.simple, 
+  g = st_make_grid(eu.simple, 
                cellsize = x*1000,  
                square = FALSE)  # make hexagon, not square
   # write hexagons
-  st_write(g, paste( myPath, outFolder, paste0(outname, ".shp"), sep = "/"),
+  st_write(g, paste( myPath, outFolder, paste0(outname, ".gpkg"), sep = "/"),
            append=FALSE)
   
 })

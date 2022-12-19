@@ -31,30 +31,29 @@ source('myPaths.R')
 
 #C:\Users\ge45lep\Documents\2021_Franconia_mortality\01_find_hotspots\outSpatial
 # Read files --------------------------------------------------------------
-grid    <- read_sf(paste(myPath, '01_find_hotspots/outSpatial', "grid_12.shp", sep = '/'))
+grid    <- read_sf(paste(myPath, 'grid', "hexa50_ger.gpkg", sep = '/'))
 
 
 # Get rasters
-disturbance <- raster(paste(myPath, inFolder, "geodata/disturbance_map_bavaria.tif", sep = "/"))
-forest      <- raster(paste(myPath, inFolder, "geodata/forestcover_germany.tif", sep = "/"))
+disturbance <- raster(paste(myPath, inFolder, "disturbances/disturbance_year_1986-2020_germany.tif", sep = "/"))
+forest      <- raster(paste(myPath, inFolder, "disturbances/forestcover_germany.tif", sep = "/"))
 
 
 # bavaria extent:
 # Get Bavaria data ----------------------
-bav.shp <- st_read(paste(myPath, inFolder, "geodata/outline_bavaria.gpkg", sep = "/"), 
-                   layer = 'outline_bavaria') # read watershed
+ger.shp <- st_read(paste(myPath, inFolder, "germany.shp", sep = "/")) # read watershed
 
 
 # Simplify polygon to speed up calculation:
-bav.simple <- st_simplify(bav.shp, preserveTopology = FALSE, dTolerance = 1500)
+ger.simple <- st_simplify(ger.shp, preserveTopology = FALSE, dTolerance = 1500)
 
 # remove unnecessary colums:
-bav.simple <- bav.simple %>% 
+ger.simple <- ger.simple %>% 
   dplyr::select('geom')
 
 
 # Make sure they have the same projection
-st_crs(bav.simple) <- st_crs(grid)
+st_crs(ger.simple) <- st_crs(grid)
 
 # get extend and set correct projectipn
 ext <- as(extent(disturbance), 'SpatialPolygons')
@@ -63,17 +62,17 @@ st_crs(ext) <- st_crs(grid)
 
 # Create grid index for each pixel
 grid_sel     <- st_intersection(st_as_sf(grid), st_as_sf(ext))
-grid_sel_ras <- fasterize(grid_sel, disturbance, field = "FID") # name the new rasters as polygon ids
+grid_sel_ras <- fasterize(grid_sel, disturbance) # name the new rasters as polygon ids #, field = "FID"
 grid_values  <- values(grid_sel_ras)     # resolution is still 30 m, grid value for each pixel
 
 # Crop the forest data to disturbance extend, snap to near pixel
-forest_bav <- crop(forest, ext, snap="near")
+forest_ger <- crop(forest, ext, snap="near")
 
 
 # Create dataframes containing grid id and disturbance vs forest data
 forest_df <-
   data.frame(gridindex = grid_values,
-             forest = values(forest_bav)) %>%
+             forest = values(forest_ger)) %>%
   group_by(gridindex) %>%
   summarize(forest_ha = sum(forest == 1, na.rm = TRUE) * 0.09,
             land_ha = n() * 0.09) %>%

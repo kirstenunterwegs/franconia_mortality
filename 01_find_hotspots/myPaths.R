@@ -10,3 +10,4 @@ inFolderFieldVeg = "03_plot_sampling/out_fieldData/data/vegetation" # field data
 outSpatial = "outSpatial"
 outTable   = "outTables"
 outReach   = "outReach"
+outFolder  = "grid"
