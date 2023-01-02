@@ -16,6 +16,7 @@ library(fasterize)
 
 
 # Read my paths -----------------------------------------------------------
+setwd("C:/Users/ge92vuh/Documents/GitHub/franconia_mortality/01_find_hotspots")
 source('myPaths.R')
 
 # ------------------
@@ -31,8 +32,9 @@ source('myPaths.R')
 
 #C:\Users\ge45lep\Documents\2021_Franconia_mortality\01_find_hotspots\outSpatial
 # Read files --------------------------------------------------------------
-grid    <- read_sf(paste(myPath, 'grid', "hexa50_ger.gpkg", sep = '/'))
-
+grid    <- read_sf(paste(myPath, 'grid', "hexa50_ger.gpkg", sep = '/')) 
+#for trial!
+grid    <- read_sf(paste(myPath, 'grid', "hexa50_subarea.gpkg", sep = '/'))
 
 # Get rasters
 disturbance <- raster(paste(myPath, inFolder, "disturbances/disturbance_year_1986-2020_germany.tif", sep = "/"))
@@ -43,6 +45,8 @@ forest      <- raster(paste(myPath, inFolder, "disturbances/forestcover_germany.
 # Get Bavaria data ----------------------
 ger.shp <- st_read(paste(myPath, inFolder, "germany.shp", sep = "/")) # read watershed
 
+#for trial
+ger.shp <- st_read(paste(myPath, inFolder, "subarea.codetrial.shp", sep = "/"))
 
 # Simplify polygon to speed up calculation:
 ger.simple <- st_simplify(ger.shp, preserveTopology = FALSE, dTolerance = 1500)
@@ -60,9 +64,12 @@ ext <- as(extent(disturbance), 'SpatialPolygons')
 ext <- st_as_sf(ext)
 st_crs(ext) <- st_crs(grid)
 
+#create FID for hexagon grid 
+grid <- grid %>% mutate(FID = row_number()) 
+
 # Create grid index for each pixel
 grid_sel     <- st_intersection(st_as_sf(grid), st_as_sf(ext))
-grid_sel_ras <- fasterize(grid_sel, disturbance) # name the new rasters as polygon ids #, field = "FID"
+grid_sel_ras <- fasterize(grid_sel, disturbance, field = "FID") # name the new rasters as polygon ids 
 grid_values  <- values(grid_sel_ras)     # resolution is still 30 m, grid value for each pixel
 
 # Crop the forest data to disturbance extend, snap to near pixel
@@ -71,10 +78,10 @@ forest_ger <- crop(forest, ext, snap="near")
 
 # Create dataframes containing grid id and disturbance vs forest data
 forest_df <-
-  data.frame(gridindex = grid_values,
+  data.frame(gridindex = grid_values,    #had to create FID for grid values before
              forest = values(forest_ger)) %>%
   group_by(gridindex) %>%
-  summarize(forest_ha = sum(forest == 1, na.rm = TRUE) * 0.09,
+  summarize(forest_ha = sum(forest == 1, na.rm = TRUE) * 0.09, #why *0.09 ? -------------------------------------------
             land_ha = n() * 0.09) %>%
   ungroup(.)
 
@@ -84,7 +91,7 @@ dist_df <-
   data.frame(gridindex = grid_values,
              dist = values(disturbance)) %>%
   na.omit(.) %>%
-  group_by(gridindex, dist) %>%   # 'dist' is the year of disturbanec here
+  group_by(gridindex, dist) %>%   # 'dist' is the year of disturbance here
   summarize(disturbance_ha = n() * 0.09) %>%
   ungroup(.) %>% 
   rename(year = dist)
@@ -111,12 +118,13 @@ drought_period   <- 2018:2020
 out.df2 <-
   out.df %>%
   group_by(gridindex) %>%
-  filter(sum(disturbance_ha) > 35) %>% # Exclude areas with less than 1 ha/yr of disturbances on average
+  filter(sum(disturbance_ha) > 35) %>% # Exclude areas with less than 1 ha/yr of disturbances on average ..why > 35? (and not 30?)---------------
   filter(sum(disturbance_ha[year %in% reference_period]) > 30) %>% # Exclude areas with less than 1 ha/yr of disturbances on average
   mutate(mean_ref    = mean(disturbance_ha[year %in% reference_period], na.rm = T),
-         sum_18_20   = sum( disturbance_ha[year %in% drought_period], na.rm = T)/3,
-         sum_19_20   = sum( disturbance_ha[year %in% c(2019,2020)], na.rm = T)/2,
-         anomaly     = disturbance_ha / mean(disturbance_ha[year %in% reference_period], na.rm = TRUE) - 1,
+         sum_18_20   = sum( disturbance_ha[year %in% drought_period], na.rm = T)/3, 
+         sum_19_20   = sum( disturbance_ha[year %in% c(2019,2020)], na.rm = T)/2, 
+         anomaly     = disturbance_ha / mean(disturbance_ha[year %in% reference_period], na.rm = TRUE) - 1, #why -1? ----------
+         # you could replace  mean(disturbance_ha[year %in% reference_period] with mean_ref you created earlier
          anomaly_18_20  = sum_18_20 / mean_ref - 1,
          anomaly_19_20  = sum_19_20 / mean_ref - 1) %>% 
   ungroup()
@@ -168,8 +176,8 @@ grid_bav <- st_intersection(st_as_sf(grid_sel),
 # Classify the data :
 
 # Create a new table:
-my_breaks = c(-5,3,1000)  # 3 = 300% percent!!
-my_cls = c('low', 'high')
+my_breaks = c(-5,3,1000)  # 3 = 300% percent!! -->is this specific to Bavaria anomaly pattern or can I adapt this for Europe?
+my_cls = c('low', 'high') #how did you define what are low and high anomalies? --------------------------------
 
 
 # create a new table:
@@ -224,7 +232,7 @@ dat_hotspots <-
     dplyr::select(FID, year, anomaly, anomaly_cl) %>% 
     dplyr::filter(anomaly_cl == 'hotspot')  # select only hotspots!!
 
-
+#so everything above 300% more disturbance then reference_mean is considered hotspot? ---------------------
 
 # -----------------------------------------
 # Plot on map as categorical variable: 
